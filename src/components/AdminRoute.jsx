@@ -1,24 +1,22 @@
-"use client"
-
-import { Navigate, Outlet } from "react-router-dom"
-import { useAuth } from "../contexts/AuthContext"
-import Navbar from "./Navbar"
-import Sidebar from "./admin/Sidebar"
-import LoadingScreen from "./LoadingScreen"
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import Navbar from "./Navbar";
+import Sidebar from "./admin/Sidebar";
+import LoadingScreen from "./LoadingScreen";
 
 const AdminRoute = () => {
-  const { isAuthenticated, isAdmin, loading } = useAuth()
+  const { isAuthenticated, isAdmin, loading } = useAuth();
 
   if (loading) {
-    return <LoadingScreen />
+    return <LoadingScreen />;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
 
   if (!isAdmin) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (
@@ -31,7 +29,7 @@ const AdminRoute = () => {
         </main>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default AdminRoute
+export default AdminRoute;

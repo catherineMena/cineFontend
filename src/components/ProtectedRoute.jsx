@@ -1,19 +1,17 @@
-"use client"
-
-import { Navigate, Outlet } from "react-router-dom"
-import { useAuth } from "../contexts/AuthContext"
-import Navbar from "./Navbar"
-import LoadingScreen from "./LoadingScreen"
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import Navbar from "./Navbar";
+import LoadingScreen from "./LoadingScreen";
 
 const ProtectedRoute = () => {
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
-    return <LoadingScreen />
+    return <LoadingScreen />;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
 
   return (
@@ -23,7 +21,7 @@ const ProtectedRoute = () => {
         <Outlet />
       </main>
     </>
-  )
-}
+  );
+};
 
-export default ProtectedRoute
+export default ProtectedRoute;
