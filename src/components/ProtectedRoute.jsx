@@ -1,27 +1,24 @@
-import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import Navbar from "./Navbar";
-import LoadingScreen from "./LoadingScreen";
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import LoadingScreen from './LoadingScreen';
 
-const ProtectedRoute = () => {
-  const { isAuthenticated, loading } = useAuth();
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+  const { loading, isAuthenticated, isAdmin } = useAuth();
 
   if (loading) {
     return <LoadingScreen />;
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" />;
   }
 
-  return (
-    <>
-      <Navbar />
-      <main className="container mx-auto px-4 py-8">
-        <Outlet />
-      </main>
-    </>
-  );
+  if (adminOnly && !isAdmin()) {
+    return <Navigate to="/cinemarooms" />;
+  }
+
+  return children;
 };
 
 export default ProtectedRoute;

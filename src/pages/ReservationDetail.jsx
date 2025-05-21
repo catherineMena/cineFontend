@@ -7,7 +7,48 @@ import { API_URL } from "../config/api"
 import { useAuth } from "../contexts/AuthContext"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { FaTicketAlt, FaCalendarAlt, FaFilm, FaSpinner, FaArrowLeft, FaDownload, FaMapMarkerAlt } from "react-icons/fa"
+import QRCode from "qrcode.react"
+import Navbar from "../components/Navbar"
+import {
+  Box,
+  Container,
+  Typography,
+  Paper,
+  Grid,
+  Button,
+  Divider,
+  Chip,
+  CircularProgress,
+  Card,
+  CardContent,
+  CardMedia,
+  useTheme,
+  alpha,
+} from "@mui/material"
+import {
+  ArrowBack as ArrowBackIcon,
+  CalendarToday as CalendarTodayIcon,
+  LocalMovies as LocalMoviesIcon,
+  LocationOn as LocationOnIcon,
+  AccessTime as AccessTimeIcon,
+  QrCode as QrCodeIcon,
+  Download as DownloadIcon,
+  Share as ShareIcon,
+  Print as PrintIcon,
+} from "@mui/icons-material"
+
+// Función para generar un QR si no existe
+const generateQRCode = (reservationData) => {
+  const qrData = JSON.stringify({
+    id: reservationData.id,
+    cinemaRoomName: reservationData.cinemaRoomName,
+    movieTitle: reservationData.movieTitle,
+    reservationDate: reservationData.reservationDate,
+    seats: reservationData.seats,
+  })
+
+  return qrData
+}
 
 const ReservationDetail = () => {
   const { id } = useParams()
@@ -15,6 +56,8 @@ const ReservationDetail = () => {
   const [reservation, setReservation] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [qrValue, setQrValue] = useState("")
+  const theme = useTheme()
 
   useEffect(() => {
     const fetchReservation = async () => {
@@ -24,10 +67,35 @@ const ReservationDetail = () => {
             Authorization: `Bearer ${token}`,
           },
         })
-        setReservation(response.data)
+
+        const reservationData = response.data
+        setReservation(reservationData)
+
+        // Generar QR si no existe
+        if (!reservationData.qrCode || reservationData.qrCode.includes("undefined")) {
+          const qrData = generateQRCode(reservationData)
+          setQrValue(qrData)
+        } else {
+          setQrValue(reservationData.qrCode)
+        }
       } catch (error) {
         console.error("Error fetching reservation:", error)
         setError("Error al cargar los detalles de la reservación. Por favor, intenta de nuevo más tarde.")
+
+        // Datos de ejemplo en caso de error
+        const mockReservation = {
+          id: id,
+          userId: 1,
+          cinemaRoomId: 1,
+          cinemaRoomName: "Sala Premium",
+          movieTitle: "Avengers: Secret Wars",
+          reservationDate: new Date().toISOString(),
+          seats: ["0-0", "0-1", "0-2"],
+          createdAt: new Date().toISOString(),
+        }
+
+        setReservation(mockReservation)
+        setQrValue(generateQRCode(mockReservation))
       } finally {
         setIsLoading(false)
       }
@@ -36,115 +104,295 @@ const ReservationDetail = () => {
     fetchReservation()
   }, [id, token])
 
+  // Función para descargar el QR como imagen
+  const downloadQRCode = () => {
+    const canvas = document.getElementById("reservation-qr-code")
+    if (canvas) {
+      const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream")
+
+      const downloadLink = document.createElement("a")
+      downloadLink.href = pngUrl
+      downloadLink.download = `ticket-${reservation.id}.png`
+      document.body.appendChild(downloadLink)
+      downloadLink.click()
+      document.body.removeChild(downloadLink)
+    }
+  }
+
+  // Formatear los asientos para mostrarlos
+  const formatSeats = (seats) => {
+    if (!seats) return []
+
+    return seats.map((seat) => {
+      const [row, col] = seat.split("-")
+      const rowLetter = String.fromCharCode(65 + Number.parseInt(row))
+      return `${rowLetter}${Number.parseInt(col) + 1}`
+    })
+  }
+
+  // Verificar si la reservación es pasada o futura
+  const isPast = reservation ? new Date(reservation.reservationDate) < new Date() : false
+
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <FaSpinner className="animate-spin text-4xl text-blue-600" />
-      </div>
+      <>
+        <Navbar />
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            minHeight: "100vh",
+          }}
+        >
+          <CircularProgress color="primary" />
+        </Box>
+      </>
     )
   }
 
   if (error || !reservation) {
     return (
-      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-        <strong className="font-bold">Error: </strong>
-        <span className="block sm:inline">{error || "No se encontró la reservación"}</span>
-      </div>
+      <>
+        <Navbar />
+        <Container maxWidth="lg" sx={{ pt: 10, pb: 4 }}>
+          <Paper sx={{ p: 3, bgcolor: "error.dark" }}>
+            <Typography variant="h6">Error</Typography>
+            <Typography>{error || "No se encontró la reservación solicitada."}</Typography>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<ArrowBackIcon />}
+              component={Link}
+              to="/reservations"
+              sx={{ mt: 2 }}
+            >
+              Volver a mis reservaciones
+            </Button>
+          </Paper>
+        </Container>
+      </>
     )
   }
 
-  // Verificar si la reservación es pasada o futura
-  const isPast = new Date(reservation.reservationDate) < new Date()
-
-  // Formatear los asientos para mostrarlos
-  const formattedSeats = reservation.seats
-    .map((seat) => {
-      const [row, col] = seat.split("-")
-      const rowLetter = String.fromCharCode(65 + Number.parseInt(row))
-      return `${rowLetter}${Number.parseInt(col) + 1}`
-    })
-    .join(", ")
+  const formattedSeats = formatSeats(reservation.seats)
 
   return (
-    <div>
-      <Link to="/reservations" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
-        <FaArrowLeft className="mr-2" /> Volver a mis reservaciones
-      </Link>
+    <>
+      <Navbar />
+      <Container maxWidth="lg" sx={{ pt: 10, pb: 8 }}>
+        <Button component={Link} to="/reservations" startIcon={<ArrowBackIcon />} sx={{ mb: 3 }}>
+          Volver a mis reservaciones
+        </Button>
 
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className={`p-4 text-white ${isPast ? "bg-gray-700" : "bg-blue-600"}`}>
-          <h1 className="text-2xl font-bold flex items-center">
-            <FaTicketAlt className="mr-2" /> Detalles de la Reservación
-          </h1>
-        </div>
+        <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
+          Detalles de la Reservación
+        </Typography>
 
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <h2 className="text-xl font-bold mb-4">{reservation.movieTitle}</h2>
+        <Grid container spacing={4}>
+          {/* Información principal */}
+          <Grid item xs={12} md={8}>
+            <Card
+              elevation={3}
+              sx={{
+                borderRadius: 2,
+                overflow: "hidden",
+                bgcolor: alpha(theme.palette.background.paper, 0.8),
+                position: "relative",
+              }}
+            >
+              {isPast && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: 20,
+                    right: 0,
+                    bgcolor: "error.main",
+                    color: "white",
+                    py: 0.5,
+                    px: 2,
+                    zIndex: 1,
+                    borderTopLeftRadius: 4,
+                    borderBottomLeftRadius: 4,
+                  }}
+                >
+                  <Typography variant="body2" fontWeight="bold">
+                    EXPIRADO
+                  </Typography>
+                </Box>
+              )}
 
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <FaFilm className="text-gray-500 mt-1 mr-3" />
-                  <div>
-                    <h3 className="font-semibold">Sala</h3>
-                    <p>{reservation.cinemaRoomName}</p>
-                  </div>
-                </div>
+              <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" } }}>
+                <CardMedia
+                  component="img"
+                  sx={{
+                    width: { xs: "100%", sm: 200 },
+                    height: { xs: 200, sm: "auto" },
+                    filter: isPast ? "grayscale(100%)" : "none",
+                  }}
+                  image={`https://i.ibb.co/Jy8Kx5T/avengers-secret-wars.jpg`}
+                  alt={reservation.movieTitle}
+                />
 
-                <div className="flex items-start">
-                  <FaCalendarAlt className="text-gray-500 mt-1 mr-3" />
-                  <div>
-                    <h3 className="font-semibold">Fecha</h3>
-                    <p>{format(new Date(reservation.reservationDate), "EEEE d 'de' MMMM 'de' yyyy", { locale: es })}</p>
-                  </div>
-                </div>
+                <CardContent sx={{ flex: "1 0 auto", p: 3 }}>
+                  <Typography variant="h5" component="h2" gutterBottom fontWeight="bold">
+                    {reservation.movieTitle}
+                  </Typography>
 
-                <div className="flex items-start">
-                  <FaMapMarkerAlt className="text-gray-500 mt-1 mr-3" />
-                  <div>
-                    <h3 className="font-semibold">Asientos</h3>
-                    <p>{formattedSeats}</p>
-                  </div>
-                </div>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 3 }}>
+                    <Chip
+                      icon={<LocalMoviesIcon />}
+                      label={reservation.cinemaRoomName}
+                      color="primary"
+                      variant="outlined"
+                    />
+                    <Chip
+                      icon={<CalendarTodayIcon />}
+                      label={format(new Date(reservation.reservationDate), "EEEE d 'de' MMMM 'de' yyyy", {
+                        locale: es,
+                      })}
+                      color="secondary"
+                      variant="outlined"
+                    />
+                    <Chip icon={<AccessTimeIcon />} label="19:30" color="default" variant="outlined" />
+                  </Box>
 
-                <div className="border-t pt-4 mt-4">
-                  <p className="text-sm text-gray-500">
-                    Reservación creada el{" "}
-                    {format(new Date(reservation.createdAt), "d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })}
-                  </p>
-                  <p className="text-sm text-gray-500">ID de reservación: {reservation.id}</p>
-                </div>
-              </div>
-            </div>
+                  <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                    <LocationOnIcon sx={{ verticalAlign: "middle", mr: 1 }} />
+                    Asientos
+                  </Typography>
 
-            <div className="flex flex-col items-center justify-center">
-              <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 mb-4">
-                <img src={`${API_URL}${reservation.qrCode}`} alt="Código QR de reservación" className="w-48 h-48" />
-              </div>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+                    {formattedSeats.map((seat) => (
+                      <Chip
+                        key={seat}
+                        label={seat}
+                        color="primary"
+                        size="small"
+                        sx={{
+                          fontWeight: "bold",
+                          opacity: isPast ? 0.7 : 1,
+                        }}
+                      />
+                    ))}
+                  </Box>
 
-              <a
-                href={`${API_URL}${reservation.qrCode}`}
-                download={`ticket-${reservation.id}.png`}
-                className={`flex items-center ${
-                  isPast ? "bg-gray-500 hover:bg-gray-600" : "bg-blue-600 hover:bg-blue-700"
-                } text-white font-bold py-2 px-4 rounded transition-colors`}
+                  <Divider sx={{ my: 2 }} />
+
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        ID de Reservación: {reservation.id}
+                      </Typography>
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        Creada el{" "}
+                        {format(new Date(reservation.createdAt), "d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })}
+                      </Typography>
+                    </Box>
+
+                    <Typography variant="h6" color={isPast ? "text.secondary" : "primary.main"} fontWeight="bold">
+                      ${(formattedSeats.length * 8.5).toFixed(2)}
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Box>
+            </Card>
+
+            {/* Acciones */}
+            <Paper
+              elevation={3}
+              sx={{
+                mt: 3,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: alpha(theme.palette.background.paper, 0.8),
+              }}
+            >
+              <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                Acciones
+              </Typography>
+
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+                <Button variant="outlined" startIcon={<DownloadIcon />} onClick={downloadQRCode} disabled={isPast}>
+                  Descargar QR
+                </Button>
+                <Button variant="outlined" startIcon={<PrintIcon />} disabled={isPast}>
+                  Imprimir Ticket
+                </Button>
+                <Button variant="outlined" startIcon={<ShareIcon />} disabled={isPast}>
+                  Compartir
+                </Button>
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* QR Code */}
+          <Grid item xs={12} md={4}>
+            <Paper
+              elevation={3}
+              sx={{
+                p: 3,
+                borderRadius: 2,
+                bgcolor: alpha(theme.palette.background.paper, 0.8),
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                height: "100%",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <QrCodeIcon sx={{ mr: 1 }} />
+                <Typography variant="h6" fontWeight="medium">
+                  Código QR
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  bgcolor: "white",
+                  p: 3,
+                  borderRadius: 2,
+                  width: "100%",
+                  maxWidth: 250,
+                  mx: "auto",
+                  mb: 3,
+                  boxShadow: 2,
+                  opacity: isPast ? 0.6 : 1,
+                }}
               >
-                <FaDownload className="mr-2" /> Descargar Código QR
-              </a>
+                <QRCode
+                  id="reservation-qr-code"
+                  value={qrValue}
+                  size={200}
+                  level="H"
+                  includeMargin
+                  renderAs="canvas"
+                  style={{ width: "100%", height: "auto" }}
+                />
+              </Box>
 
-              <p className="text-sm text-gray-500 mt-4 text-center">Presenta este código QR en la entrada del cine</p>
-            </div>
-          </div>
-        </div>
+              <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
+                Presenta este código QR en la entrada del cine para acceder a la sala.
+              </Typography>
 
-        {isPast && (
-          <div className="bg-gray-100 p-4 border-t border-gray-200">
-            <p className="text-center text-gray-600">Esta reservación ya ha pasado. Gracias por tu visita.</p>
-          </div>
-        )}
-      </div>
-    </div>
+              {isPast ? (
+                <Chip label="Esta reservación ya ha expirado" color="error" variant="outlined" sx={{ mt: "auto" }} />
+              ) : (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<DownloadIcon />}
+                  onClick={downloadQRCode}
+                  sx={{ mt: "auto" }}
+                >
+                  Descargar QR
+                </Button>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+      </Container>
+    </>
   )
 }
 

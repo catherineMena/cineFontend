@@ -1,107 +1,158 @@
-"use client"
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import API_URL from '../config/api.js';
 
-import { createContext, useState, useEffect, useContext } from "react"
-import { API_URL } from "../config/api"
-import axios from "axios"
+// Crear el contexto
+export const AuthContext = createContext();
 
-const AuthContext = createContext()
-
-export const useAuth = () => useContext(AuthContext)
+// Hook personalizado para usar el contexto de autenticación
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
+  }
+  return context;
+};
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
-  const [token, setToken] = useState(localStorage.getItem("token") || null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
+  // Verificar si hay un usuario en localStorage al cargar
   useEffect(() => {
-    const verifyToken = async () => {
-      if (!token) {
-        setLoading(false)
-        return
-      }
-
+    const checkLoggedIn = async () => {
       try {
-        const response = await axios.get(`${API_URL}/api/auth/verify`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        setUser(response.data.user)
+        const token = localStorage.getItem('token');
+        
+        if (token) {
+          // Verificar el token con el backend
+          try {
+            const response = await axios.post(
+              `${API_URL}/auth/verify-token`,
+              {},
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`
+                }
+              }
+            );
+            
+            if (response.data.success) {
+              setUser(response.data.user);
+              setError(null);
+            } else {
+              // Token inválido, limpiar localStorage
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              setUser(null);
+            }
+          } catch (error) {
+            console.error('Error al verificar token:', error);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+          }
+        }
+        
+        setLoading(false);
       } catch (error) {
-        console.error("Error verifying token:", error)
-        logout()
-      } finally {
-        setLoading(false)
+        console.error('Error al verificar autenticación:', error);
+        setLoading(false);
       }
-    }
+    };
 
-    verifyToken()
-  }, [token])
+    checkLoggedIn();
+  }, []);
 
+  // Función de inicio de sesión
   const login = async (username, password) => {
-    setError(null)
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
+      setError(null);
+      console.log('Intentando iniciar sesión con:', { username, password });
+      
+      const response = await axios.post(`${API_URL}/auth/login`, {
         username,
-        password,
-      })
-
-      const { token, user } = response.data
-
-      localStorage.setItem("token", token)
-      setToken(token)
-      setUser(user)
-
-      return user
+        password
+      });
+      
+      console.log('Respuesta del servidor:', response.data);
+      
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        setUser(response.data.user);
+        
+        // Redirigir según el rol
+        if (response.data.user.role === 'admin') {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/cinemarooms');
+        }
+        
+        return true;
+      }
     } catch (error) {
-      console.error("Login error:", error)
-      setError(error.response?.data?.message || "Error al iniciar sesión")
-      throw error
+      console.error('Error en login:', error);
+      setError(error.response?.data?.message || 'Error al iniciar sesión');
+      return false;
     }
-  }
+  };
 
-  const register = async (username, email, password) => {
-    setError(null)
+  // Función de registro
+  const register = async (userData) => {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/register`, {
-        username,
-        email,
-        password,
-      })
-
-      const { token, user } = response.data
-
-      localStorage.setItem("token", token)
-      setToken(token)
-      setUser(user)
-
-      return user
+      setError(null);
+      const response = await axios.post(`${API_URL}/auth/register`, userData);
+      
+      if (response.data) {
+        // Redirigir a login después de registro exitoso
+        navigate('/login');
+        return true;
+      }
     } catch (error) {
-      console.error("Register error:", error)
-      setError(error.response?.data?.message || "Error al registrarse")
-      throw error
+      console.error('Error en registro:', error);
+      setError(error.response?.data?.message || 'Error al registrar usuario');
+      return false;
     }
-  }
+  };
 
+  // Función de cierre de sesión
   const logout = () => {
-    localStorage.removeItem("token")
-    setToken(null)
-    setUser(null)
-  }
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    navigate('/login');
+  };
 
-  const value = {
-    user,
-    token,
-    loading,
-    error,
-    login,
-    register,
-    logout,
-    isAuthenticated: !!user,
-    isAdmin: user?.role === "admin",
-  }
+  // Verificar si el usuario está autenticado
+  const isAuthenticated = () => {
+    return !!user;
+  };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
+  // Verificar si el usuario es administrador
+  const isAdmin = () => {
+    return user && user.role === 'admin';
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        error,
+        login,
+        register,
+        logout,
+        isAuthenticated,
+        isAdmin
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export default AuthContext;

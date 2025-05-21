@@ -1,167 +1,416 @@
-"use client"
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { useAuth } from '../../contexts/AuthContext';
+import { API_URL } from '../../config/api';
 
-import { useState, useEffect } from "react"
-import axios from "axios"
-import { API_URL } from "../../config/api"
-import { useAuth } from "../../contexts/AuthContext"
-import { FaUsers, FaSpinner, FaSearch, FaUserCheck, FaUserTimes, FaUserCog } from "react-icons/fa"
-import toast from "react-hot-toast"
-import { FaCouch } from "react-icons/fa" // Import FaCouch for seat icons
+// Crear un archivo CSS básico para AdminUsers
+const styles = {
+  adminUsers: {
+    padding: '20px',
+    maxWidth: '1200px',
+    margin: '0 auto'
+  },
+  adminHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px'
+  },
+  searchContainer: {
+    position: 'relative',
+    width: '300px'
+  },
+  searchInput: {
+    width: '100%',
+    padding: '10px 35px 10px 10px',
+    borderRadius: '4px',
+    border: '1px solid #ddd'
+  },
+  searchIcon: {
+    position: 'absolute',
+    right: '10px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    color: '#6c757d'
+  },
+  noUsers: {
+    textAlign: 'center',
+    padding: '50px 0',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '8px'
+  },
+  usersTableContainer: {
+    overflowX: 'auto'
+  },
+  usersTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    marginTop: '20px'
+  },
+  roleBadge: {
+    padding: '5px 10px',
+    borderRadius: '20px',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    display: 'inline-block'
+  },
+  admin: {
+    backgroundColor: '#dc3545',
+    color: 'white'
+  },
+  user: {
+    backgroundColor: '#28a745',
+    color: 'white'
+  },
+  actionsCell: {
+    display: 'flex',
+    gap: '10px',
+    justifyContent: 'center'
+  },
+  roleButton: {
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '5px 10px',
+    cursor: 'pointer'
+  },
+  deleteButton: {
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '5px 10px',
+    cursor: 'pointer'
+  },
+  adminLoading: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '300px'
+  },
+  spinner: {
+    border: '4px solid rgba(0, 0, 0, 0.1)',
+    borderRadius: '50%',
+    borderTop: '4px solid #e50914',
+    width: '40px',
+    height: '40px',
+    animation: 'spin 1s linear infinite'
+  },
+  adminError: {
+    textAlign: 'center',
+    padding: '50px',
+    backgroundColor: '#f8d7da',
+    color: '#721c24',
+    borderRadius: '8px'
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000
+  },
+  modal: {
+    backgroundColor: 'white',
+    padding: '20px',
+    borderRadius: '8px',
+    maxWidth: '500px',
+    width: '100%'
+  },
+  warning: {
+    color: '#dc3545',
+    fontWeight: 'bold'
+  },
+  modalButtons: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '10px',
+    marginTop: '20px'
+  },
+  cancelButton: {
+    backgroundColor: '#6c757d',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '8px 15px',
+    cursor: 'pointer'
+  },
+  confirmButton: {
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '8px 15px',
+    cursor: 'pointer'
+  }
+};
 
 const AdminUsers = () => {
-  const { token, user: currentUser } = useAuth()
-  const [users, setUsers] = useState([])
-  const [filteredUsers, setFilteredUsers] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [error, setError] = useState(null)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [userToChangeRole, setUserToChangeRole] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const navigate = useNavigate();
+  
+  // Usar el hook de autenticación
+  const { user, isAuthenticated } = useAuth();
 
   useEffect(() => {
+    // Verificar autenticación
+    if (!isAuthenticated() || (user && user.role !== 'admin')) {
+      navigate('/login');
+      return;
+    }
+
+    // Cargar usuarios
     const fetchUsers = async () => {
       try {
-        const response = await axios.get(`${API_URL}/api/users`, {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/users`, {
           headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-        setUsers(response.data)
-        setFilteredUsers(response.data)
+            Authorization: `Bearer ${token}`
+          }
+        });
+        setUsers(response.data);
+        setFilteredUsers(response.data);
+        setLoading(false);
       } catch (error) {
-        console.error("Error fetching users:", error)
-        setError("Error al cargar los usuarios. Por favor, intenta de nuevo más tarde.")
-      } finally {
-        setIsLoading(false)
+        console.error('Error al cargar usuarios:', error);
+        setError('Error al cargar los usuarios. Por favor, intenta de nuevo más tarde.');
+        setLoading(false);
       }
-    }
+    };
 
-    fetchUsers()
-  }, [token])
+    fetchUsers();
+  }, [navigate, isAuthenticated, user]);
 
+  // Filtrar usuarios cuando cambia el término de búsqueda
   useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredUsers(users)
+    if (searchTerm.trim() === '') {
+      setFilteredUsers(users);
     } else {
-      const filtered = users.filter(
-        (user) =>
-          user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase()),
-      )
-      setFilteredUsers(filtered)
+      const filtered = users.filter(user => 
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredUsers(filtered);
     }
-  }, [searchTerm, users])
+  }, [searchTerm, users]);
 
-  const handleToggleUserStatus = async (userId, currentStatus) => {
-    if (userId === currentUser.id) {
-      toast.error("No puedes cambiar tu propio estado")
-      return
-    }
+  // Función para abrir el modal de confirmación de eliminación
+  const handleDeleteClick = (user) => {
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
 
-    setIsProcessing(true)
+  // Función para cerrar el modal de eliminación
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setUserToDelete(null);
+  };
+
+  // Función para abrir el modal de cambio de rol
+  const handleRoleClick = (user) => {
+    setUserToChangeRole(user);
+    setShowRoleModal(true);
+  };
+
+  // Función para cerrar el modal de cambio de rol
+  const closeRoleModal = () => {
+    setShowRoleModal(false);
+    setUserToChangeRole(null);
+  };
+
+  // Función para eliminar un usuario
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
 
     try {
-      const endpoint = currentStatus
-        ? `${API_URL}/api/users/${userId}/deactivate`
-        : `${API_URL}/api/users/${userId}/activate`
-
-      await axios.put(
-        endpoint,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
-
-      // Actualizar el estado del usuario en la lista
-      setUsers(users.map((user) => (user.id === userId ? { ...user, active: !currentStatus } : user)))
-
-      toast.success(`Usuario ${currentStatus ? "desactivado" : "activado"} exitosamente`)
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_URL}/users/${userToDelete.id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // Actualizar la lista de usuarios
+      setUsers(users.filter(u => u.id !== userToDelete.id));
+      setFilteredUsers(filteredUsers.filter(u => u.id !== userToDelete.id));
+      closeDeleteModal();
     } catch (error) {
-      console.error("Error toggling user status:", error)
-      toast.error("Error al cambiar el estado del usuario. Por favor, intenta de nuevo más tarde.")
-    } finally {
-      setIsProcessing(false)
+      console.error('Error al eliminar usuario:', error);
+      setError('Error al eliminar el usuario. Por favor, intenta de nuevo más tarde.');
+      closeDeleteModal();
     }
+  };
+
+  // Función para cambiar el rol de un usuario
+  const confirmRoleChange = async () => {
+    if (!userToChangeRole) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const newRole = userToChangeRole.role === 'admin' ? 'user' : 'admin';
+      
+      await axios.put(`${API_URL}/users/${userToChangeRole.id}/role`, { role: newRole }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // Actualizar la lista de usuarios
+      const updatedUsers = users.map(u => {
+        if (u.id === userToChangeRole.id) {
+          return { ...u, role: newRole };
+        }
+        return u;
+      });
+      
+      setUsers(updatedUsers);
+      setFilteredUsers(updatedUsers.filter(u => 
+        u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+      ));
+      
+      closeRoleModal();
+    } catch (error) {
+      console.error('Error al cambiar rol de usuario:', error);
+      setError('Error al cambiar el rol del usuario. Por favor, intenta de nuevo más tarde.');
+      closeRoleModal();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={styles.adminLoading}>
+        <div style={styles.spinner}></div>
+        <p>Cargando usuarios...</p>
+      </div>
+    );
   }
 
-  // Function to render seat icons
-  const renderSeatIcons = (seats) => {
-    return seats.map((seat, index) => (
-      <span
-        key={index}
-        style={{ color: seat.status === "available" ? "green" : seat.status === "selected" ? "blue" : "red" }}
-      >
-        <FaCouch /> {seat.code}
-      </span>
-    ))
+  if (error) {
+    return (
+      <div style={styles.adminError}>
+        <h2>Error</h2>
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()}>Reintentar</button>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen">
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-4 flex items-center">
-          <FaUsers className="mr-2" /> Administración de Usuarios
-        </h1>
-        {isLoading ? (
-          <div className="flex justify-center items-center">
-            <FaSpinner className="animate-spin text-4xl text-blue-500" />
-          </div>
-        ) : error ? (
-          <div className="text-red-500 text-center">{error}</div>
-        ) : (
-          <div>
-            <div className="mb-4 flex items-center">
-              <FaSearch className="mr-2" />
-              <input
-                type="text"
-                className="border p-2 rounded w-full"
-                placeholder="Buscar usuarios por nombre o correo"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredUsers.map((user) => (
-                <div key={user.id} className="bg-white p-4 rounded shadow flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold">{user.username}</h2>
-                    <p className="text-gray-600">{user.email}</p>
-                  </div>
-                  <div className="flex items-center">
-                    {user.active ? (
-                      <FaUserCheck
-                        className="text-green-500 mr-2 cursor-pointer"
-                        onClick={() => handleToggleUserStatus(user.id, user.active)}
-                      />
-                    ) : (
-                      <FaUserTimes
-                        className="text-red-500 mr-2 cursor-pointer"
-                        onClick={() => handleToggleUserStatus(user.id, user.active)}
-                      />
-                    )}
-                    <FaUserCog className="text-gray-500 cursor-pointer" />
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Render seat icons */}
-            <div className="mt-8">
-              <h2 className="text-2xl font-bold mb-4">Visualización de Asientos</h2>
-              <div className="flex flex-wrap gap-4">
-                {renderSeatIcons([
-                  { id: 1, code: "A1", status: "available" },
-                  { id: 2, code: "A2", status: "selected" },
-                  { id: 3, code: "A3", status: "reserved" },
-                ])}
-              </div>
-            </div>
-          </div>
-        )}
+    <div style={styles.adminUsers}>
+      <div style={styles.adminHeader}>
+        <h1>Administrar Usuarios</h1>
+        <div style={styles.searchContainer}>
+          <input
+            type="text"
+            placeholder="Buscar por nombre o email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={styles.searchInput}
+          />
+          <i className="fas fa-search" style={styles.searchIcon}></i>
+        </div>
       </div>
-    </div>
-  )
-}
 
-export default AdminUsers
+      {filteredUsers.length === 0 ? (
+        <div style={styles.noUsers}>
+          <p>No se encontraron usuarios.</p>
+        </div>
+      ) : (
+        <div style={styles.usersTableContainer}>
+          <table style={styles.usersTable}>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Fecha de Registro</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map(u => (
+                <tr key={u.id}>
+                  <td>{u.id}</td>
+                  <td>{u.username}</td>
+                  <td>{u.email}</td>
+                  <td>
+                    <span style={{...styles.roleBadge, ...(u.role === 'admin' ? styles.admin : styles.user)}}>
+                      {u.role === 'admin' ? 'Administrador' : 'Usuario'}
+                    </span>
+                  </td>
+                  <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td style={styles.actionsCell}>
+                    <button 
+                      style={styles.roleButton}
+                      onClick={() => handleRoleClick(u)}
+                      disabled={u.id === user?.id} // No permitir cambiar el propio rol
+                    >
+                      <i className="fas fa-user-cog"></i>
+                    </button>
+                    <button 
+                      style={styles.deleteButton}
+                      onClick={() => handleDeleteClick(u)}
+                      disabled={u.id === user?.id} // No permitir eliminar el propio usuario
+                    >
+                      <i className="fas fa-trash-alt"></i>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación */}
+      {showDeleteModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <h2>Confirmar Eliminación</h2>
+            <p>¿Estás seguro de que deseas eliminar al usuario <strong>{userToDelete?.username}</strong>?</p>
+            <p style={styles.warning}>Esta acción no se puede deshacer y eliminará todas las reservaciones asociadas.</p>
+            <div style={styles.modalButtons}>
+              <button style={styles.cancelButton} onClick={closeDeleteModal}>Cancelar</button>
+              <button style={styles.confirmButton} onClick={confirmDelete}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cambio de rol */}
+      {showRoleModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <h2>Cambiar Rol de Usuario</h2>
+            <p>¿Estás seguro de que deseas cambiar el rol de <strong>{userToChangeRole?.username}</strong> de <strong>{userToChangeRole?.role === 'admin' ? 'Administrador' : 'Usuario'}</strong> a <strong>{userToChangeRole?.role === 'admin' ? 'Usuario' : 'Administrador'}</strong>?</p>
+            <div style={styles.modalButtons}>
+              <button style={styles.cancelButton} onClick={closeRoleModal}>Cancelar</button>
+              <button style={styles.confirmButton} onClick={confirmRoleChange}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminUsers;

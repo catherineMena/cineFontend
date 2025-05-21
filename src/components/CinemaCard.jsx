@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import { FaCalendarAlt, FaUsers } from "react-icons/fa"
-import { API_URL } from "../config/api"
+import { API_URL } from "../config/api" // Importación correcta
 
 const CinemaCard = ({ cinema }) => {
   // Obtener la fecha de hoy en formato YYYY-MM-DD

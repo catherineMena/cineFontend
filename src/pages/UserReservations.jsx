@@ -7,13 +7,59 @@ import { API_URL } from "../config/api"
 import { useAuth } from "../contexts/AuthContext"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { FaTicketAlt, FaCalendarAlt, FaFilm, FaSpinner, FaQrcode } from "react-icons/fa"
+import Navbar from "../components/Navbar"
+import {
+  Box,
+  Container,
+  Typography,
+  Card,
+  CardContent,
+  CardMedia,
+  Grid,
+  Button,
+  Chip,
+  Divider,
+  CircularProgress,
+  Paper,
+  useTheme,
+  alpha,
+} from "@mui/material"
+import {
+  CalendarToday as CalendarTodayIcon,
+  EventSeat as EventSeatIcon,
+  Movie as MovieIcon,
+  QrCode2 as QrCode2Icon,
+  AccessTime as AccessTimeIcon,
+  ArrowForward as ArrowForwardIcon,
+} from "@mui/icons-material"
+
+// Lista de películas con URLs de imágenes públicas
+const MOVIE_POSTERS = {
+  "Avengers: Endgame": "https://i.ibb.co/Jy8Kx5T/avengers-secret-wars.jpg",
+  "Star Wars": "https://i.ibb.co/Lk6ZyGM/avatar-3.jpg",
+  "Black Panther": "https://i.ibb.co/YRKTt9M/black-panther-3.jpg",
+  "Mission Impossible": "https://i.ibb.co/Jj1tHZG/mission-impossible-8.jpg",
+  "Fantastic Four": "https://i.ibb.co/Lp7H0zn/fantastic-four.jpg",
+  Blade: "https://i.ibb.co/YWBKpWL/blade.jpg",
+  "Captain America": "https://i.ibb.co/Jj4vWsL/captain-america-brave-new-world.jpg",
+  Thunderbolts: "https://i.ibb.co/Lk3Lq1S/thunderbolts.jpg",
+  Dune: "https://i.ibb.co/YRKTt9M/dune-messiah.jpg",
+  "Jurassic World": "https://i.ibb.co/YWBKpWL/jurassic-world-4.jpg",
+}
+
+// Función para obtener una imagen de póster basada en el título de la película
+const getMoviePoster = (title) => {
+  // Buscar coincidencias parciales en los títulos
+  const matchingKey = Object.keys(MOVIE_POSTERS).find((key) => title.toLowerCase().includes(key.toLowerCase()))
+  return matchingKey ? MOVIE_POSTERS[matchingKey] : "https://i.ibb.co/Jy8Kx5T/avengers-secret-wars.jpg"
+}
 
 const UserReservations = () => {
   const { token } = useAuth()
   const [reservations, setReservations] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const theme = useTheme()
 
   useEffect(() => {
     const fetchReservations = async () => {
@@ -27,6 +73,30 @@ const UserReservations = () => {
       } catch (error) {
         console.error("Error fetching reservations:", error)
         setError("Error al cargar las reservaciones. Por favor, intenta de nuevo más tarde.")
+
+        // Datos de ejemplo en caso de error
+        setReservations([
+          {
+            id: 1,
+            cinemaRoomId: 1,
+            cinemaRoomName: "Sala Premium",
+            movieTitle: "Avengers: Endgame",
+            reservationDate: "2025-05-21T00:00:00.000Z",
+            seats: ["0-0", "0-1", "0-2"],
+            qrCode: "/qrcodes/reservation_1.png",
+            createdAt: "2025-05-15T10:30:00.000Z",
+          },
+          {
+            id: 2,
+            cinemaRoomId: 2,
+            cinemaRoomName: "Sala VIP",
+            movieTitle: "Black Panther: Wakanda Forever",
+            reservationDate: "2025-05-22T00:00:00.000Z",
+            seats: ["1-3", "1-4"],
+            qrCode: "/qrcodes/reservation_2.png",
+            createdAt: "2025-05-16T14:45:00.000Z",
+          },
+        ])
       } finally {
         setIsLoading(false)
       }
@@ -47,137 +117,305 @@ const UserReservations = () => {
     .filter((reservation) => new Date(reservation.reservationDate) < today)
     .sort((a, b) => new Date(b.reservationDate) - new Date(a.reservationDate))
 
+  // Función para formatear los asientos
+  const formatSeats = (seats) => {
+    if (!seats) return []
+
+    return seats.map((seat) => {
+      const [row, col] = seat.split("-")
+      const rowLetter = String.fromCharCode(65 + Number.parseInt(row))
+      return `${rowLetter}${Number.parseInt(col) + 1}`
+    })
+  }
+
+  // Componente de tarjeta de reservación
+  const ReservationCard = ({ reservation, isPast }) => {
+    const formattedSeats = formatSeats(reservation.seats)
+    const reservationDate = new Date(reservation.reservationDate)
+
+    return (
+      <Card
+        sx={{
+          display: "flex",
+          mb: 3,
+          borderRadius: 2,
+          overflow: "hidden",
+          boxShadow: 3,
+          opacity: isPast ? 0.7 : 1,
+          transition: "transform 0.3s ease, box-shadow 0.3s ease",
+          "&:hover": {
+            transform: "translateY(-5px)",
+            boxShadow: 6,
+          },
+          position: "relative",
+        }}
+      >
+        {isPast && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: 20,
+              right: 0,
+              bgcolor: "error.main",
+              color: "white",
+              py: 0.5,
+              px: 2,
+              zIndex: 1,
+              borderTopLeftRadius: 4,
+              borderBottomLeftRadius: 4,
+            }}
+          >
+            <Typography variant="body2" fontWeight="bold">
+              EXPIRADO
+            </Typography>
+          </Box>
+        )}
+
+        <CardMedia
+          component="img"
+          sx={{
+            width: { xs: 120, sm: 150 },
+            filter: isPast ? "grayscale(100%)" : "none",
+          }}
+          image={getMoviePoster(reservation.movieTitle)}
+          alt={reservation.movieTitle}
+        />
+
+        <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
+          <CardContent sx={{ flex: "1 0 auto", pb: 1 }}>
+            <Typography variant="h6" component="div" fontWeight="bold" gutterBottom>
+              {reservation.movieTitle}
+            </Typography>
+
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
+              <Chip
+                icon={<MovieIcon fontSize="small" />}
+                label={reservation.cinemaRoomName}
+                size="small"
+                color={isPast ? "default" : "primary"}
+                variant="outlined"
+              />
+              <Chip
+                icon={<CalendarTodayIcon fontSize="small" />}
+                label={format(reservationDate, "EEE, d MMM yyyy", { locale: es })}
+                size="small"
+                color={isPast ? "default" : "secondary"}
+                variant="outlined"
+              />
+              <Chip
+                icon={<AccessTimeIcon fontSize="small" />}
+                label="19:30"
+                size="small"
+                color={isPast ? "default" : "default"}
+                variant="outlined"
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+              <EventSeatIcon fontSize="small" sx={{ mr: 1, color: "text.secondary" }} />
+              <Typography variant="body2" color="text.secondary">
+                Asientos: {formattedSeats.join(", ")}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <QrCode2Icon fontSize="small" sx={{ mr: 1, color: "text.secondary" }} />
+              <Typography variant="body2" color="text.secondary">
+                Código QR disponible
+              </Typography>
+            </Box>
+          </CardContent>
+
+          <Box sx={{ display: "flex", justifyContent: "flex-end", p: 1 }}>
+            <Button
+              component={Link}
+              to={`/reservations/${reservation.id}`}
+              endIcon={<ArrowForwardIcon />}
+              color={isPast ? "inherit" : "primary"}
+              variant="text"
+              size="small"
+            >
+              Ver Detalles
+            </Button>
+          </Box>
+        </Box>
+      </Card>
+    )
+  }
+
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <FaSpinner className="animate-spin text-4xl text-blue-600" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-        <strong className="font-bold">Error: </strong>
-        <span className="block sm:inline">{error}</span>
-      </div>
-    )
-  }
-
-  if (reservations.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <FaTicketAlt className="text-gray-400 text-5xl mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">No tienes reservaciones</h2>
-        <p className="text-gray-500 mb-6">¡Reserva tus asientos para disfrutar de las mejores películas!</p>
-        <Link
-          to="/cinemas"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full transition-colors"
-        >
-          Ver Películas
-        </Link>
-      </div>
+      <>
+        <Navbar />
+        <Container maxWidth="lg" sx={{ pt: 10, pb: 8 }}>
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+            <CircularProgress />
+          </Box>
+        </Container>
+      </>
     )
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Mis Reservaciones</h1>
+    <>
+      <Navbar />
+      <Container maxWidth="lg" sx={{ pt: 10, pb: 8 }}>
+        <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
+          Mis Reservaciones
+        </Typography>
 
-      {upcomingReservations.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <FaCalendarAlt className="mr-2 text-blue-600" /> Próximas Funciones
-          </h2>
+        {error && (
+          <Paper
+            sx={{
+              p: 2,
+              mb: 4,
+              bgcolor: alpha(theme.palette.error.main, 0.1),
+              color: "error.main",
+              borderRadius: 2,
+            }}
+          >
+            <Typography>{error}</Typography>
+          </Paper>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {upcomingReservations.map((reservation) => (
-              <Link
-                key={reservation.id}
-                to={`/reservations/${reservation.id}`}
-                className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden border border-gray-200"
-              >
-                <div className="p-4 flex items-start">
-                  <div className="bg-blue-100 rounded-lg p-3 mr-4">
-                    <FaQrcode className="text-blue-600 text-3xl" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg mb-1">{reservation.movieTitle}</h3>
-                    <p className="text-gray-600 mb-1">Sala: {reservation.cinemaRoomName}</p>
-                    <p className="text-gray-600 mb-2">
-                      <FaCalendarAlt className="inline mr-1" />
-                      {format(new Date(reservation.reservationDate), "EEEE d 'de' MMMM 'de' yyyy", { locale: es })}
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {reservation.seats.map((seat) => {
-                        const [row, col] = seat.split("-")
-                        const rowLetter = String.fromCharCode(65 + Number.parseInt(row))
-                        return (
-                          <span key={seat} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                            {rowLetter}
-                            {Number.parseInt(col) + 1}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
-                  <div className="ml-4 text-right">
-                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Activa</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+        {reservations.length === 0 && !error ? (
+          <Paper
+            sx={{
+              p: 4,
+              textAlign: "center",
+              borderRadius: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.8),
+            }}
+          >
+            <MovieIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />
+            <Typography variant="h5" gutterBottom>
+              No tienes reservaciones
+            </Typography>
+            <Typography variant="body1" color="text.secondary" paragraph>
+              ¡Reserva tus asientos para disfrutar de las mejores películas!
+            </Typography>
+            <Button component={Link} to="/cinema-rooms" variant="contained" color="primary" sx={{ mt: 2 }}>
+              Ver Películas
+            </Button>
+          </Paper>
+        ) : (
+          <Grid container spacing={4}>
+            {/* Próximas funciones */}
+            <Grid item xs={12} md={upcomingReservations.length > 0 ? 8 : 12}>
+              <Box sx={{ mb: 4 }}>
+                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                  <CalendarTodayIcon sx={{ mr: 1, color: "primary.main" }} />
+                  <Typography variant="h5" component="h2" fontWeight="bold">
+                    Próximas Funciones
+                  </Typography>
+                </Box>
 
-      {pastReservations.length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <FaFilm className="mr-2 text-gray-600" /> Historial de Reservaciones
-          </h2>
+                <Divider sx={{ mb: 3 }} />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pastReservations.map((reservation) => (
-              <Link
-                key={reservation.id}
-                to={`/reservations/${reservation.id}`}
-                className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden border border-gray-200 opacity-75"
-              >
-                <div className="p-4 flex items-start">
-                  <div className="bg-gray-100 rounded-lg p-3 mr-4">
-                    <FaQrcode className="text-gray-500 text-3xl" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg mb-1">{reservation.movieTitle}</h3>
-                    <p className="text-gray-600 mb-1">Sala: {reservation.cinemaRoomName}</p>
-                    <p className="text-gray-600 mb-2">
-                      <FaCalendarAlt className="inline mr-1" />
-                      {format(new Date(reservation.reservationDate), "EEEE d 'de' MMMM 'de' yyyy", { locale: es })}
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {reservation.seats.map((seat) => {
-                        const [row, col] = seat.split("-")
-                        const rowLetter = String.fromCharCode(65 + Number.parseInt(row))
-                        return (
-                          <span key={seat} className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
-                            {rowLetter}
-                            {Number.parseInt(col) + 1}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
-                  <div className="ml-4 text-right">
-                    <span className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">Pasada</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+                {upcomingReservations.length > 0 ? (
+                  upcomingReservations.map((reservation) => (
+                    <ReservationCard key={reservation.id} reservation={reservation} isPast={false} />
+                  ))
+                ) : (
+                  <Paper
+                    sx={{
+                      p: 3,
+                      textAlign: "center",
+                      borderRadius: 2,
+                      bgcolor: alpha(theme.palette.background.paper, 0.6),
+                    }}
+                  >
+                    <Typography variant="body1" color="text.secondary">
+                      No tienes próximas funciones reservadas.
+                    </Typography>
+                    <Button component={Link} to="/cinema-rooms" variant="outlined" color="primary" sx={{ mt: 2 }}>
+                      Explorar Películas
+                    </Button>
+                  </Paper>
+                )}
+              </Box>
+
+              {/* Historial de reservaciones */}
+              {pastReservations.length > 0 && (
+                <Box>
+                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                    <MovieIcon sx={{ mr: 1, color: "text.secondary" }} />
+                    <Typography variant="h5" component="h2" fontWeight="bold">
+                      Historial de Reservaciones
+                    </Typography>
+                  </Box>
+
+                  <Divider sx={{ mb: 3 }} />
+
+                  {pastReservations.map((reservation) => (
+                    <ReservationCard key={reservation.id} reservation={reservation} isPast={true} />
+                  ))}
+                </Box>
+              )}
+            </Grid>
+
+            {/* Resumen lateral (solo si hay reservaciones próximas) */}
+            {upcomingReservations.length > 0 && (
+              <Grid item xs={12} md={4}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    borderRadius: 2,
+                    position: "sticky",
+                    top: 100,
+                    bgcolor: alpha(theme.palette.background.paper, 0.8),
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom fontWeight="bold">
+                    Resumen de Reservaciones
+                  </Typography>
+
+                  <Divider sx={{ mb: 2 }} />
+
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Próximas funciones
+                    </Typography>
+                    <Typography variant="h4" fontWeight="bold" color="primary.main">
+                      {upcomingReservations.length}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Total de asientos reservados
+                    </Typography>
+                    <Typography variant="h4" fontWeight="bold">
+                      {upcomingReservations.reduce((total, res) => total + (res.seats?.length || 0), 0)}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Próxima función
+                    </Typography>
+                    {upcomingReservations.length > 0 && (
+                      <Box sx={{ display: "flex", alignItems: "center" }}>
+                        <CalendarTodayIcon sx={{ mr: 1, color: "primary.main" }} />
+                        <Typography fontWeight="medium">
+                          {format(new Date(upcomingReservations[0].reservationDate), "EEEE, d 'de' MMMM", {
+                            locale: es,
+                          })}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+
+                  <Button component={Link} to="/cinema-rooms" variant="contained" color="primary" fullWidth>
+                    Reservar Más Películas
+                  </Button>
+                </Paper>
+              </Grid>
+            )}
+          </Grid>
+        )}
+      </Container>
+    </>
   )
 }
 
